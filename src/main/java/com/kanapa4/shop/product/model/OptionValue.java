@@ -40,5 +40,5 @@ public class OptionValue {
     @Column(nullable = false, precision = 19, scale = 2)
     private BigDecimal priceDelta = BigDecimal.ZERO;
 
-    private int sortOrder;
+    private int position;
 }

@@ -1,0 +1,64 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-seed-products
+      author: kanapa4
+      changes:
+        - sql:
+            sql: |
+              INSERT INTO products (id, name, description, type, base_price, currency, vat_rate, attributes, active) VALUES
+              ('11111111-0000-0000-0000-000000000001', 'Laptop Pro 15', 'Laptop for work and study, 15.6 inch display', 'COMPUTER', 3999.00, 'PLN', 'VAT_23', '{"screen": "15.6 inch", "weight": "1.8 kg"}', true),
+              ('11111111-0000-0000-0000-000000000002', 'Gaming Tower', 'Desktop computer for gaming', 'COMPUTER', 4999.00, 'PLN', 'VAT_23', '{"form": "tower", "gpu": "RTX 4060"}', true),
+              ('22222222-0000-0000-0000-000000000001', 'Smartphone X1', 'Flagship smartphone with 6.5 inch OLED display', 'SMARTPHONE', 2499.00, 'PLN', 'VAT_23', '{"screen": "6.5 inch OLED", "storage": "128 GB"}', true),
+              ('22222222-0000-0000-0000-000000000002', 'Smartphone Lite', 'Affordable smartphone for everyday use', 'SMARTPHONE', 1299.00, 'PLN', 'VAT_23', '{"screen": "6.1 inch LCD", "storage": "64 GB"}', true),
+              ('33333333-0000-0000-0000-000000000001', 'Wireless Headphones', 'Over-ear headphones with noise cancelling', 'ELECTRONICS', 349.00, 'PLN', 'VAT_23', '{"connection": "Bluetooth 5.3"}', true),
+              ('33333333-0000-0000-0000-000000000002', 'Smart Watch', 'Fitness and notifications on your wrist', 'ELECTRONICS', 599.00, 'PLN', 'VAT_23', '{"battery": "7 days"}', true),
+              ('33333333-0000-0000-0000-000000000003', 'USB-C Charger 65W', 'Fast charger for laptops and phones', 'ELECTRONICS', 129.00, 'PLN', 'VAT_23', '{"power": "65 W"}', true);
+
+              INSERT INTO option_groups (id, product_id, code, name, selection_type, required, position)
+              SELECT gen_random_uuid(), p.id, g.code, g.name, g.selection_type, g.required, g.position
+              FROM products p
+              CROSS JOIN (VALUES
+                  ('PROCESSOR', 'Processor', 'SINGLE', true, 1),
+                  ('RAM', 'Memory (RAM)', 'SINGLE', true, 2)
+              ) AS g(code, name, selection_type, required, position)
+              WHERE p.type = 'COMPUTER';
+
+              INSERT INTO option_groups (id, product_id, code, name, selection_type, required, position)
+              SELECT gen_random_uuid(), p.id, g.code, g.name, g.selection_type, g.required, g.position
+              FROM products p
+              CROSS JOIN (VALUES
+                  ('COLOR', 'Color', 'SINGLE', true, 1),
+                  ('BATTERY_CAPACITY', 'Battery capacity', 'SINGLE', true, 2),
+                  ('ACCESSORIES', 'Accessories', 'MULTI', false, 3)
+              ) AS g(code, name, selection_type, required, position)
+              WHERE p.type = 'SMARTPHONE';
+
+              INSERT INTO option_values (id, group_id, code, label, price_delta, position)
+              SELECT gen_random_uuid(), og.id, v.code, v.label, v.price_delta, v.position
+              FROM option_groups og
+              JOIN products p ON p.id = og.product_id
+              JOIN (VALUES
+                  ('PROCESSOR', 'I5', 'Intel Core i5', 0.00, 1),
+                  ('PROCESSOR', 'I7', 'Intel Core i7', 800.00, 2),
+                  ('PROCESSOR', 'I9', 'Intel Core i9', 1800.00, 3),
+                  ('RAM', 'RAM_16', '16 GB', 0.00, 1),
+                  ('RAM', 'RAM_32', '32 GB', 400.00, 2),
+                  ('RAM', 'RAM_64', '64 GB', 1100.00, 3)
+              ) AS v(group_code, code, label, price_delta, position) ON v.group_code = og.code
+              WHERE p.type = 'COMPUTER';
+
+              INSERT INTO option_values (id, group_id, code, label, price_delta, position)
+              SELECT gen_random_uuid(), og.id, v.code, v.label, v.price_delta, v.position
+              FROM option_groups og
+              JOIN products p ON p.id = og.product_id
+              JOIN (VALUES
+                  ('COLOR', 'BLACK', 'Black', 0.00, 1),
+                  ('COLOR', 'WHITE', 'White', 0.00, 2),
+                  ('COLOR', 'BLUE', 'Blue', 50.00, 3),
+                  ('BATTERY_CAPACITY', 'MAH_4000', '4000 mAh', 0.00, 1),
+                  ('BATTERY_CAPACITY', 'MAH_5000', '5000 mAh', 150.00, 2),
+                  ('ACCESSORIES', 'CASE', 'Protective case', 49.00, 1),
+                  ('ACCESSORIES', 'SCREEN_PROTECTOR', 'Screen protector', 29.00, 2),
+                  ('ACCESSORIES', 'CHARGER', 'Fast charger', 99.00, 3)
+              ) AS v(group_code, code, label, price_delta, position) ON v.group_code = og.code
+              WHERE p.type = 'SMARTPHONE';
