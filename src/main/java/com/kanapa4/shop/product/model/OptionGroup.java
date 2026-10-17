@@ -50,10 +50,10 @@ public class OptionGroup {
     @Column(nullable = false)
     private boolean required;
 
-    private int sortOrder;
+    private int position;
 
     @OneToMany(mappedBy = "optionGroup", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("sortOrder")
+    @OrderBy("position")
     private List<OptionValue> values = new ArrayList<>();
 
     public void addValue(OptionValue value) {

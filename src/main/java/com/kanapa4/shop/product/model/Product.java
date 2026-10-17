@@ -52,7 +52,7 @@ public class Product {
     private boolean active = true;
 
     @OneToMany(mappedBy = "product", cascade = CascadeType.ALL, orphanRemoval = true)
-    @OrderBy("sortOrder")
+    @OrderBy("position")
     private List<OptionGroup> optionGroups = new ArrayList<>();
 
     public void addOptionGroup(OptionGroup group) {
