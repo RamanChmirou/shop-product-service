@@ -89,6 +89,22 @@ class ProductApiIntegrationTest {
         return builder.append("]}").toString();
     }
 
+    private static String batchItem(String productId, String... pairs) {
+        StringBuilder options = new StringBuilder();
+        for (int i = 0; i < pairs.length; i += 2) {
+            if (i > 0) {
+                options.append(",");
+            }
+            options.append("{\"groupCode\":\"").append(pairs[i])
+                    .append("\",\"valueCode\":\"").append(pairs[i + 1]).append("\"}");
+        }
+        return "{\"productId\":\"%s\",\"selectedOptions\":[%s]}".formatted(productId, options);
+    }
+
+    private static String batch(String... items) {
+        return "{\"items\":[" + String.join(",", items) + "]}";
+    }
+
     private String createProduct(String json) throws Exception {
         String body = mockMvc.perform(post("/products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -288,5 +304,71 @@ class ProductApiIntegrationTest {
     void delete_UnknownProduct_Return404() throws Exception {
         mockMvc.perform(delete("/products/{id}", UUID.randomUUID()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void quoteAll_LaptopAndSmartphone_ReturnPricesInRequestOrder() throws Exception {
+        String body = batch(
+                batchItem(LAPTOP_ID, "PROCESSOR", "I7", "RAM", "RAM_32"),
+                batchItem(SMARTPHONE_ID, "COLOR", "BLUE", "BATTERY_CAPACITY", "MAH_5000",
+                        "ACCESSORIES", "CASE", "ACCESSORIES", "CHARGER"));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quotes.length()").value(2))
+                .andExpect(jsonPath("$.quotes[0].productId").value(LAPTOP_ID))
+                .andExpect(jsonPath("$.quotes[0].unitPrice.amount").value(5199.00))
+                .andExpect(jsonPath("$.quotes[1].productId").value(SMARTPHONE_ID))
+                .andExpect(jsonPath("$.quotes[1].unitPrice.amount").value(2847.00));
+    }
+
+    @Test
+    void quoteAll_SameLaptopTwoConfigurations_ReturnSeparateQuotes() throws Exception {
+        String body = batch(
+                batchItem(LAPTOP_ID, "PROCESSOR", "I7", "RAM", "RAM_32"),
+                batchItem(LAPTOP_ID, "PROCESSOR", "I7", "RAM", "RAM_16"));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quotes[0].unitPrice.amount").value(5199.00))
+                .andExpect(jsonPath("$.quotes[1].unitPrice.amount").value(4799.00));
+    }
+
+    @Test
+    void quoteAll_OneUnknownProduct_Return404ForWholeRequest() throws Exception {
+        String body = batch(
+                batchItem(LAPTOP_ID, "PROCESSOR", "I7", "RAM", "RAM_32"),
+                batchItem(UUID.randomUUID().toString()));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void quoteAll_OneInvalidSelection_Return400ForWholeRequest() throws Exception {
+        String body = batch(
+                batchItem(LAPTOP_ID, "PROCESSOR", "I7", "RAM", "RAM_32"),
+                batchItem(LAPTOP_ID, "PROCESSOR", "I7"));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").exists());
+    }
+
+    @Test
+    void quoteAll_EmptyItems_Return400() throws Exception {
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(batch()))
+                .andExpect(status().isBadRequest());
     }
 }

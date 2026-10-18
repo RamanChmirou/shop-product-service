@@ -1,11 +1,6 @@
 package com.kanapa4.shop.product.service;
 
-import com.kanapa4.shop.product.dto.PriceQuoteDto;
-import com.kanapa4.shop.product.dto.PriceQuoteRequest;
-import com.kanapa4.shop.product.dto.ProductConfigurationDto;
-import com.kanapa4.shop.product.dto.ProductDto;
-import com.kanapa4.shop.product.dto.ProductRequest;
-import com.kanapa4.shop.product.dto.ProductSummaryDto;
+import com.kanapa4.shop.product.dto.*;
 import com.kanapa4.shop.product.exception.ProductNotFoundException;
 import com.kanapa4.shop.product.mapper.ProductMapper;
 import com.kanapa4.shop.product.model.Product;
@@ -20,7 +15,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -56,9 +56,16 @@ public class ProductService {
 
     public PriceQuoteDto quote(UUID id, PriceQuoteRequest request) {
         log.debug("Calculating price quote for product {}", id);
-        Product product = findOrThrow(id);
-        productConfigurationValidator.validate(product, request.selectedOptions());
-        return priceQuoteCalculator.calculate(product, request.selectedOptions());
+        return calculateQuote(findOrThrow(id), request.selectedOptions());
+    }
+
+    public BatchPriceQuoteResponse quoteAll(BatchPriceQuoteRequest request) {
+        log.debug("Calculating {} price quotes", request.items().size());
+        Map<UUID, Product> products = loadProducts(request.items());
+        List<PriceQuoteDto> quotes = request.items().stream()
+                .map(item -> calculateQuote(products.get(item.productId()), item.selectedOptions()))
+                .toList();
+        return new BatchPriceQuoteResponse(quotes);
     }
 
     @Transactional
@@ -92,5 +99,25 @@ public class ProductService {
     private Product findOrThrow(UUID id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ProductNotFoundException(id));
+    }
+
+    private PriceQuoteDto calculateQuote(Product product, List<SelectedOptionRequest> selectedOptions) {
+        productConfigurationValidator.validate(product, selectedOptions);
+        return priceQuoteCalculator.calculate(product, selectedOptions);
+    }
+
+    private Map<UUID, Product> loadProducts(List<BatchPriceQuoteItemRequest> items) {
+        Set<UUID> ids = items.stream()
+                .map(BatchPriceQuoteItemRequest::productId)
+                .collect(Collectors.toSet());
+        Map<UUID, Product> found = productRepository.findAllById(ids).stream()
+                .collect(Collectors.toMap(Product::getId, Function.identity()));
+        ids.stream()
+                .filter(id -> !found.containsKey(id))
+                .findFirst()
+                .ifPresent(missing -> {
+                    throw new ProductNotFoundException(missing);
+                });
+        return found;
     }
 }

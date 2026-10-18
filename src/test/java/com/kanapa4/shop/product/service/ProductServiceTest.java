@@ -1,14 +1,6 @@
 package com.kanapa4.shop.product.service;
 
-import com.kanapa4.shop.product.dto.PriceDto;
-import com.kanapa4.shop.product.dto.PriceQuoteDto;
-import com.kanapa4.shop.product.dto.PriceQuoteRequest;
-import com.kanapa4.shop.product.dto.PriceRequest;
-import com.kanapa4.shop.product.dto.ProductConfigurationDto;
-import com.kanapa4.shop.product.dto.ProductDto;
-import com.kanapa4.shop.product.dto.ProductRequest;
-import com.kanapa4.shop.product.dto.ProductSummaryDto;
-import com.kanapa4.shop.product.dto.SelectedOptionRequest;
+import com.kanapa4.shop.product.dto.*;
 import com.kanapa4.shop.product.exception.InvalidProductConfigurationException;
 import com.kanapa4.shop.product.exception.ProductNotFoundException;
 import com.kanapa4.shop.product.mapper.ProductMapper;
@@ -30,16 +22,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
 
 import static com.kanapa4.shop.product.testdata.ProductFixtures.LAPTOP_ID;
 import static com.kanapa4.shop.product.testdata.ProductFixtures.laptop;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
@@ -272,5 +259,56 @@ class ProductServiceTest {
 
         assertThrows(ProductNotFoundException.class, () -> productService.delete(id));
         verify(productRepository, never()).delete(any(Product.class));
+    }
+
+    private static BatchPriceQuoteRequest batch(BatchPriceQuoteItemRequest... items) {
+        return new BatchPriceQuoteRequest(List.of(items));
+    }
+
+    @Test
+    void quoteAll_SameProductTwoConfigurations_ReturnQuotesInRequestOrderWithSingleLookup() {
+        Product product = laptop();
+        List<SelectedOptionRequest> ram16 = List.of(new SelectedOptionRequest("RAM", "RAM_16"));
+        List<SelectedOptionRequest> ram32 = List.of(new SelectedOptionRequest("RAM", "RAM_32"));
+        PriceQuoteDto quote16 = new PriceQuoteDto(LAPTOP_ID, "Laptop Pro 15", priceDto(), List.of());
+        PriceQuoteDto quote32 = new PriceQuoteDto(LAPTOP_ID, "Laptop Pro 15", priceDto(), List.of());
+        when(productRepository.findAllById(Set.of(LAPTOP_ID))).thenReturn(List.of(product));
+        when(priceQuoteCalculator.calculate(product, ram16)).thenReturn(quote16);
+        when(priceQuoteCalculator.calculate(product, ram32)).thenReturn(quote32);
+
+        BatchPriceQuoteResponse result = productService.quoteAll(batch(
+                new BatchPriceQuoteItemRequest(LAPTOP_ID, ram16),
+                new BatchPriceQuoteItemRequest(LAPTOP_ID, ram32)));
+
+        assertEquals(2, result.quotes().size());
+        assertSame(quote16, result.quotes().get(0));
+        assertSame(quote32, result.quotes().get(1));
+        verify(productRepository).findAllById(Set.of(LAPTOP_ID));
+        verify(productConfigurationValidator).validate(product, ram16);
+        verify(productConfigurationValidator).validate(product, ram32);
+    }
+
+    @Test
+    void quoteAll_OneProductMissing_ThrowsExceptionAndCalculatesNothing() {
+        UUID missingId = UUID.randomUUID();
+        when(productRepository.findAllById(Set.of(LAPTOP_ID, missingId))).thenReturn(List.of(laptop()));
+
+        assertThrows(ProductNotFoundException.class, () -> productService.quoteAll(batch(
+                new BatchPriceQuoteItemRequest(LAPTOP_ID, List.of()),
+                new BatchPriceQuoteItemRequest(missingId, List.of()))));
+        verifyNoInteractions(productConfigurationValidator, priceQuoteCalculator);
+    }
+
+    @Test
+    void quoteAll_InvalidSelection_ThrowsException() {
+        Product product = laptop();
+        List<SelectedOptionRequest> selected = List.of(new SelectedOptionRequest("PROCESSOR", "I7"));
+        when(productRepository.findAllById(Set.of(LAPTOP_ID))).thenReturn(List.of(product));
+        doThrow(new InvalidProductConfigurationException("Required group missing"))
+                .when(productConfigurationValidator).validate(product, selected);
+
+        assertThrows(InvalidProductConfigurationException.class, () -> productService.quoteAll(
+                batch(new BatchPriceQuoteItemRequest(LAPTOP_ID, selected))));
+        verifyNoInteractions(priceQuoteCalculator);
     }
 }
