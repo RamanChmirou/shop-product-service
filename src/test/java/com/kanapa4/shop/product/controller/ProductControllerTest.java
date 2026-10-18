@@ -1,14 +1,6 @@
 package com.kanapa4.shop.product.controller;
 
-import com.kanapa4.shop.product.dto.PriceDto;
-import com.kanapa4.shop.product.dto.PriceQuoteDto;
-import com.kanapa4.shop.product.dto.PriceQuoteRequest;
-import com.kanapa4.shop.product.dto.PriceRequest;
-import com.kanapa4.shop.product.dto.ProductConfigurationDto;
-import com.kanapa4.shop.product.dto.ProductDto;
-import com.kanapa4.shop.product.dto.ProductRequest;
-import com.kanapa4.shop.product.dto.ProductSummaryDto;
-import com.kanapa4.shop.product.dto.SelectedOptionRequest;
+import com.kanapa4.shop.product.dto.*;
 import com.kanapa4.shop.product.exception.InvalidProductConfigurationException;
 import com.kanapa4.shop.product.exception.ProductNotFoundException;
 import com.kanapa4.shop.product.model.ProductType;
@@ -31,6 +23,7 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -358,5 +351,120 @@ class ProductControllerTest {
 
         mockMvc.perform(delete("/products/{id}", id))
                 .andExpect(status().isNotFound());
+    }
+
+    private static BatchPriceQuoteRequest batchRequest(int size) {
+        return new BatchPriceQuoteRequest(IntStream.range(0, size)
+                .mapToObj(index -> new BatchPriceQuoteItemRequest(PRODUCT_ID, List.of()))
+                .toList());
+    }
+
+    @Test
+    void quoteAll_ValidRequest_Return200WithQuotes() throws Exception {
+        PriceDto first = new PriceDto(new BigDecimal("5199.00"), "PLN", VatRate.VAT_23);
+        PriceDto second = new PriceDto(new BigDecimal("4799.00"), "PLN", VatRate.VAT_23);
+        when(productService.quoteAll(any(BatchPriceQuoteRequest.class)))
+                .thenReturn(new BatchPriceQuoteResponse(List.of(
+                        new PriceQuoteDto(PRODUCT_ID, "Laptop Pro 15", first, List.of()),
+                        new PriceQuoteDto(PRODUCT_ID, "Laptop Pro 15", second, List.of()))));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(batchRequest(2))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quotes.length()").value(2))
+                .andExpect(jsonPath("$.quotes[0].unitPrice.amount").value(5199.00))
+                .andExpect(jsonPath("$.quotes[1].unitPrice.amount").value(4799.00));
+    }
+
+    @Test
+    void quoteAll_MaxSizeRequest_Return200() throws Exception {
+        when(productService.quoteAll(any(BatchPriceQuoteRequest.class)))
+                .thenReturn(new BatchPriceQuoteResponse(List.of()));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(batchRequest(50))))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void quoteAll_EmptyItems_Return400() throws Exception {
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(batchRequest(0))))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).quoteAll(any());
+    }
+
+    @Test
+    void quoteAll_MissingItems_Return400() throws Exception {
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).quoteAll(any());
+    }
+
+    @Test
+    void quoteAll_TooManyItems_Return400() throws Exception {
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(batchRequest(51))))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).quoteAll(any());
+    }
+
+    @Test
+    void quoteAll_MissingProductId_Return400() throws Exception {
+        BatchPriceQuoteRequest request = new BatchPriceQuoteRequest(
+                List.of(new BatchPriceQuoteItemRequest(null, List.of())));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).quoteAll(any());
+    }
+
+    @Test
+    void quoteAll_MissingSelectedOptions_Return400() throws Exception {
+        BatchPriceQuoteRequest request = new BatchPriceQuoteRequest(
+                List.of(new BatchPriceQuoteItemRequest(PRODUCT_ID, null)));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+
+        verify(productService, never()).quoteAll(any());
+    }
+
+    @Test
+    void quoteAll_ProductNotFound_Return404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(productService.quoteAll(any(BatchPriceQuoteRequest.class))).thenThrow(new ProductNotFoundException(id));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(batchRequest(1))))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    void quoteAll_InvalidSelection_Return400() throws Exception {
+        when(productService.quoteAll(any(BatchPriceQuoteRequest.class)))
+                .thenThrow(new InvalidProductConfigurationException("Required option group RAM is missing"));
+
+        mockMvc.perform(post("/products/price-quotes")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(batchRequest(1))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Required option group RAM is missing"));
     }
 }

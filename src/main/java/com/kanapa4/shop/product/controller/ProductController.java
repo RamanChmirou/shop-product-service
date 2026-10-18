@@ -1,11 +1,6 @@
 package com.kanapa4.shop.product.controller;
 
-import com.kanapa4.shop.product.dto.PriceQuoteDto;
-import com.kanapa4.shop.product.dto.PriceQuoteRequest;
-import com.kanapa4.shop.product.dto.ProductConfigurationDto;
-import com.kanapa4.shop.product.dto.ProductDto;
-import com.kanapa4.shop.product.dto.ProductRequest;
-import com.kanapa4.shop.product.dto.ProductSummaryDto;
+import com.kanapa4.shop.product.dto.*;
 import com.kanapa4.shop.product.model.ProductType;
 import com.kanapa4.shop.product.service.ProductService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -101,6 +96,21 @@ public class ProductController {
     public PriceQuoteDto quote(@PathVariable UUID id, @Valid @RequestBody PriceQuoteRequest request) {
         log.info("POST /products/{}/price-quote, {} selected options", id, request.selectedOptions().size());
         return productService.quote(id, request);
+    }
+
+    @Operation(summary = "Calculate price quotes for several products",
+            description = "Calculates unit prices for up to 50 items in one request. "
+                    + "The order of quotes matches the order of items. All or nothing: "
+                    + "an unknown product or invalid options fail the whole request.")
+    @ApiResponses(value = {
+            @ApiResponse(responseCode = "200", description = "Price quotes calculated"),
+            @ApiResponse(responseCode = "400", description = "Invalid payload or option selection"),
+            @ApiResponse(responseCode = "404", description = "Product not found")
+    })
+    @PostMapping("/price-quotes")
+    public BatchPriceQuoteResponse quoteAll(@Valid @RequestBody BatchPriceQuoteRequest request) {
+        log.info("POST /products/price-quotes, {} items", request.items().size());
+        return productService.quoteAll(request);
     }
 
     @Operation(summary = "Create a new product",
