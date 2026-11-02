@@ -1,0 +1,78 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-products
+      author: kanapa4
+      changes:
+        - createTable:
+            tableName: products
+            columns:
+              - column: { name: id, type: uuid, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: name, type: varchar(255), constraints: { nullable: false } }
+              - column: { name: description, type: text }
+              - column: { name: type, type: varchar(32), constraints: { nullable: false } }
+              - column: { name: base_price, type: "numeric(19,2)", constraints: { nullable: false } }
+              - column: { name: currency, type: varchar(3), constraints: { nullable: false } }
+              - column: { name: vat_rate, type: varchar(16), constraints: { nullable: false } }
+              - column: { name: attributes, type: jsonb }
+              - column: { name: active, type: boolean, defaultValueBoolean: true, constraints: { nullable: false } }
+        - createIndex:
+            tableName: products
+            indexName: idx_products_type_active
+            columns:
+              - column: { name: type }
+              - column: { name: active }
+
+  - changeSet:
+      id: 002-create-option-groups
+      author: kanapa4
+      changes:
+        - createTable:
+            tableName: option_groups
+            columns:
+              - column: { name: id, type: uuid, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: product_id, type: uuid, constraints: { nullable: false } }
+              - column: { name: code, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: name, type: varchar(255), constraints: { nullable: false } }
+              - column: { name: selection_type, type: varchar(16), constraints: { nullable: false } }
+              - column: { name: required, type: boolean, constraints: { nullable: false } }
+              - column: { name: position, type: int, defaultValueNumeric: 0, constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: option_groups
+            baseColumnNames: product_id
+            referencedTableName: products
+            referencedColumnNames: id
+            constraintName: fk_option_groups_product
+        - createIndex:
+            tableName: option_groups
+            indexName: ux_option_groups_product_code
+            unique: true
+            columns:
+              - column: { name: product_id }
+              - column: { name: code }
+
+  - changeSet:
+      id: 003-create-option-values
+      author: kanapa4
+      changes:
+        - createTable:
+            tableName: option_values
+            columns:
+              - column: { name: id, type: uuid, constraints: { primaryKey: true, nullable: false } }
+              - column: { name: group_id, type: uuid, constraints: { nullable: false } }
+              - column: { name: code, type: varchar(64), constraints: { nullable: false } }
+              - column: { name: label, type: varchar(255), constraints: { nullable: false } }
+              - column: { name: price_delta, type: "numeric(19,2)", defaultValueNumeric: 0, constraints: { nullable: false } }
+              - column: { name: position, type: int, defaultValueNumeric: 0, constraints: { nullable: false } }
+        - addForeignKeyConstraint:
+            baseTableName: option_values
+            baseColumnNames: group_id
+            referencedTableName: option_groups
+            referencedColumnNames: id
+            constraintName: fk_option_values_group
+        - createIndex:
+            tableName: option_values
+            indexName: ux_option_values_group_code
+            unique: true
+            columns:
+              - column: { name: group_id }
+              - column: { name: code }
