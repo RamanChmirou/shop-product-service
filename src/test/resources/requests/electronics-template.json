@@ -1,0 +1,8 @@
+{
+  "name": "%s",
+  "description": "Integration test product",
+  "type": "ELECTRONICS",
+  "price": { "amount": %s, "currency": "PLN", "vatRate": "VAT_23" },
+  "attributes": { "power": "%s" }
+}
+

@@ -65,7 +65,7 @@ public class ProductService {
         List<PriceQuoteDto> quotes = request.items().stream()
                 .map(item -> calculateQuote(products.get(item.productId()), item.selectedOptions()))
                 .toList();
-        return new BatchPriceQuoteResponse(quotes);
+        return createBatchPriceQuoteResponse(quotes);
     }
 
     @Transactional
@@ -119,5 +119,9 @@ public class ProductService {
                     throw new ProductNotFoundException(missing);
                 });
         return found;
+    }
+
+    private BatchPriceQuoteResponse createBatchPriceQuoteResponse(List<PriceQuoteDto> quotes) {
+        return new BatchPriceQuoteResponse(quotes);
     }
 }

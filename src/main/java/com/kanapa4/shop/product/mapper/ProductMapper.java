@@ -19,6 +19,8 @@ import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;
 
+import java.util.stream.IntStream;
+
 
 @Mapper(componentModel = "spring")
 public interface ProductMapper {
@@ -64,15 +66,26 @@ public interface ProductMapper {
 
     @AfterMapping
     default void linkOptionGroups(@MappingTarget Product product) {
-        int groupOrder = 0;
-        for (OptionGroup group : product.getOptionGroups()) {
-            group.setProduct(product);
-            group.setPosition(groupOrder++);
-            int valueOrder = 0;
-            for (OptionValue value : group.getValues()) {
-                value.setOptionGroup(group);
-                value.setPosition(valueOrder++);
-            }
+        if (product.getOptionGroups() == null) {
+            return;
         }
+        var groups = product.getOptionGroups();
+        IntStream.range(0, groups.size())
+                .forEach(index -> linkGroup(product, groups.get(index), index));
+    }
+
+    private void linkGroup(Product product, OptionGroup group, int position) {
+        group.setProduct(product);
+        group.setPosition(position);
+        if (group.getValues() != null) {
+            var values = group.getValues();
+            IntStream.range(0, values.size())
+                    .forEach(index -> linkValue(group, values.get(index), index));
+        }
+    }
+
+    private void linkValue(OptionGroup group, OptionValue value, int position) {
+        value.setOptionGroup(group);
+        value.setPosition(position);
     }
 }

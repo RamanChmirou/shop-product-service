@@ -9,6 +9,7 @@ import com.kanapa4.shop.product.model.SelectionType;
 import com.kanapa4.shop.product.model.VatRate;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
 import java.util.UUID;
 
 public final class ProductFixtures {
@@ -50,9 +51,7 @@ public final class ProductFixtures {
         group.setSelectionType(selectionType);
         group.setRequired(required);
         group.setPosition(position);
-        for (OptionValue value : values) {
-            group.addValue(value);
-        }
+        Arrays.stream(values).forEach(group::addValue);
         return group;
     }
 
