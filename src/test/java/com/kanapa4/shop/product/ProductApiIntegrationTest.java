@@ -1,6 +1,7 @@
 package com.kanapa4.shop.product;
 
 import com.jayway.jsonpath.JsonPath;
+import com.kanapa4.shop.product.util.TestFileUtils;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,7 +10,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.context.annotation.Import;
 
+import java.util.Arrays;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -32,72 +36,35 @@ class ProductApiIntegrationTest {
     private MockMvc mockMvc;
 
 
+    private static final String ELECTRONICS_TEMPLATE = TestFileUtils.readJson("requests/electronics-template.json");
+    private static final String COMPUTER_TEMPLATE = TestFileUtils.readJson("requests/computer-template.json");
+    private static final String ELECTRONICS_INVALID_JSON = TestFileUtils.readJson("requests/electronics-invalid-with-groups.json");
+
     private static String electronicsJson(String name, String amount, String power) {
-        return """
-                {
-                  "name": "%s",
-                  "description": "Integration test product",
-                  "type": "ELECTRONICS",
-                  "price": { "amount": %s, "currency": "PLN", "vatRate": "VAT_23" },
-                  "attributes": { "power": "%s" }
-                }
-                """.formatted(name, amount, power);
+        return ELECTRONICS_TEMPLATE.formatted(name, amount, power);
     }
 
     private static String computerJson(String name, String valuesJson) {
-        return """
-                {
-                  "name": "%s",
-                  "description": "Integration test computer",
-                  "type": "COMPUTER",
-                  "price": { "amount": 3000.00, "currency": "PLN", "vatRate": "VAT_23" },
-                  "optionGroups": [
-                    {
-                      "code": "COLOR",
-                      "name": "Color",
-                      "selectionType": "SINGLE",
-                      "required": true,
-                      "values": %s
-                    }
-                  ]
-                }
-                """.formatted(name, valuesJson);
+        return COMPUTER_TEMPLATE.formatted(name, valuesJson);
     }
 
     private static String values(String... codes) {
-        StringBuilder builder = new StringBuilder("[");
-        for (int i = 0; i < codes.length; i++) {
-            if (i > 0) {
-                builder.append(",");
-            }
-            builder.append("{\"code\":\"").append(codes[i])
-                    .append("\",\"label\":\"").append(codes[i])
-                    .append("\",\"priceDelta\":0}");
-        }
-        return builder.append("]").toString();
+        return Arrays.stream(codes)
+                .map(code -> "{\"code\":\"" + code + "\",\"label\":\"" + code + "\",\"priceDelta\":0}")
+                .collect(Collectors.joining(",", "[", "]"));
     }
 
     private static String selection(String... pairs) {
-        StringBuilder builder = new StringBuilder("{\"selectedOptions\":[");
-        for (int i = 0; i < pairs.length; i += 2) {
-            if (i > 0) {
-                builder.append(",");
-            }
-            builder.append("{\"groupCode\":\"").append(pairs[i])
-                    .append("\",\"valueCode\":\"").append(pairs[i + 1]).append("\"}");
-        }
-        return builder.append("]}").toString();
+        String items = IntStream.range(0, pairs.length / 2)
+                .mapToObj(i -> "{\"groupCode\":\"" + pairs[i * 2] + "\",\"valueCode\":\"" + pairs[i * 2 + 1] + "\"}")
+                .collect(Collectors.joining(","));
+        return "{\"selectedOptions\":[" + items + "]}";
     }
 
     private static String batchItem(String productId, String... pairs) {
-        StringBuilder options = new StringBuilder();
-        for (int i = 0; i < pairs.length; i += 2) {
-            if (i > 0) {
-                options.append(",");
-            }
-            options.append("{\"groupCode\":\"").append(pairs[i])
-                    .append("\",\"valueCode\":\"").append(pairs[i + 1]).append("\"}");
-        }
+        String options = IntStream.range(0, pairs.length / 2)
+                .mapToObj(i -> "{\"groupCode\":\"" + pairs[i * 2] + "\",\"valueCode\":\"" + pairs[i * 2 + 1] + "\"}")
+                .collect(Collectors.joining(","));
         return "{\"productId\":\"%s\",\"selectedOptions\":[%s]}".formatted(productId, options);
     }
 
@@ -229,19 +196,7 @@ class ProductApiIntegrationTest {
 
     @Test
     void create_ElectronicsWithOptionGroups_Return400() throws Exception {
-        String json = """
-                {
-                  "name": "Zzz Broken Product",
-                  "type": "ELECTRONICS",
-                  "price": { "amount": 99.00, "currency": "PLN", "vatRate": "VAT_23" },
-                  "optionGroups": [
-                    { "code": "COLOR", "name": "Color", "selectionType": "SINGLE", "required": true,
-                      "values": [ { "code": "BLACK", "label": "Black", "priceDelta": 0 } ] }
-                  ]
-                }
-                """;
-
-        mockMvc.perform(post("/products").contentType(MediaType.APPLICATION_JSON).content(json))
+        mockMvc.perform(post("/products").contentType(MediaType.APPLICATION_JSON).content(ELECTRONICS_INVALID_JSON))
                 .andExpect(status().isBadRequest());
     }
 
